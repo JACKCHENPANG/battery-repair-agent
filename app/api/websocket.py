@@ -1,13 +1,12 @@
-import uuid
 """WebSocket endpoint for real-time repair session."""
 import json
 import uuid
 from fastapi import WebSocket
+from starlette.websockets import WebSocketDisconnect
 from app.models.schemas import ImageAck, AnalysisResult, ReasoningResult, GuidanceResult, ErrorResult, StatusMessage
 from app.services.repair import RepairSession
 
-# In-memory session store
-_sessions = {}
+_sessions: dict[str, RepairSession] = {}
 
 
 def get_session(session_id: str) -> RepairSession:
@@ -17,13 +16,13 @@ def get_session(session_id: str) -> RepairSession:
 
 
 def parse_client_message(raw_data: str) -> dict:
-    """Parse client message, handling union type parsing issues."""
     try:
         data = json.loads(raw_data)
         msg_type = data.get("type")
-        
         if msg_type == "image":
-            return {"parsed": True, "type": "image", "data": data.get("data", ""), "image_id": data.get("image_id", ""), "filename": data.get("filename", "")}
+            return {"parsed": True, "type": "image", "data": data.get("data", ""),
+                    "image_id": data.get("image_id", ""), "filename": data.get("filename", ""),
+                    "mime": data.get("mime", "image/jpeg")}
         elif msg_type == "symptom":
             return {"parsed": True, "type": "symptom", "symptom": data.get("symptom", "")}
         elif msg_type == "measure":
@@ -36,18 +35,15 @@ def parse_client_message(raw_data: str) -> dict:
         return {"parsed": False, "error": str(e)}
 
 
-async def websocket_endpoint(websocket: WebSocket):
-    """Handle a WebSocket repair session."""
-    session_id = str(uuid.uuid4())[:8]
+async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    """Handle a WebSocket repair session. Caller must already have accepted the socket."""
     session = get_session(session_id)
-    
-    await websocket.send_json({"type": "connected", "session_id": session_id})
-    
+
     try:
         while True:
             raw = await websocket.receive_text()
             parsed = parse_client_message(raw)
-            
+
             if not parsed.get("parsed"):
                 await websocket.send_json(ErrorResult(message=parsed.get("error", "解析失败")).model_dump())
                 continue
@@ -55,9 +51,10 @@ async def websocket_endpoint(websocket: WebSocket):
             msg_type = parsed["type"]
 
             if msg_type == "image":
-                await websocket.send_json(StatusMessage(message="正在分析图片...").model_dump())
+                await websocket.send_json(StatusMessage(message="正在分析 PCB 照片，请稍候...").model_dump())
                 try:
-                    result = await session.analyze_components(parsed["data"])
+                    result = await session.analyze_components(parsed["data"], parsed.get("mime", "image/jpeg"))
+                    comp_count = len(result["components"])
                     await websocket.send_json(
                         AnalysisResult(
                             components=result["components"],
@@ -66,6 +63,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         ).model_dump()
                     )
                     await websocket.send_json(ImageAck(image_id=parsed["image_id"]).model_dump())
+                    summary = f"识别完成，共发现 **{comp_count}** 个元件。\n\n请描述您观察到的故障现象（如：充电时发热、无法开机、电量显示异常等）。"
+                    await websocket.send_json({"type": "chat", "content": summary})
                 except Exception as e:
                     await websocket.send_json(ErrorResult(message=f"图片分析失败: {e}").model_dump())
 
@@ -102,7 +101,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     except Exception as e:
                         await websocket.send_json(ErrorResult(message=f"报告生成失败: {e}").model_dump())
                 else:
-                    await websocket.send_json(StatusMessage(message="请描述故障现象或输入'生成维修报告'").model_dump())
+                    await websocket.send_json(StatusMessage(message="请描述故障现象或点击「生成报告」按钮").model_dump())
 
+    except WebSocketDisconnect:
+        pass
     except Exception:
         pass

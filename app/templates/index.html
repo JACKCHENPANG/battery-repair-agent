@@ -3,231 +3,540 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🔋 电池维修 AI 助手</title>
+  <title>电池维修 AI 助手</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; }
-    header { background: rgba(30,41,59,0.95); backdrop-filter: blur(10px); padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-    header h1 { font-size: 18px; font-weight: 600; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; flex-shrink: 0; }
-    .status-dot.connected { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      padding: 0 20px;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .logo { font-size: 22px; }
+    header h1 { font-size: 16px; font-weight: 600; color: #f1f5f9; }
+    .conn-badge {
+      display: flex; align-items: center; gap: 6px;
+      background: #0f172a; border-radius: 20px; padding: 4px 10px;
+      font-size: 12px; color: #64748b; margin-left: auto;
+    }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #475569; flex-shrink: 0;
+    }
+    .dot.on { background: #22c55e; box-shadow: 0 0 6px #22c55e; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── Layout ── */
     #main { display: flex; flex: 1; overflow: hidden; }
-    #sidebar { width: 280px; background: rgba(30,41,59,0.5); border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; overflow-y: auto; }
-    .sidebar-section { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .sidebar-section h3 { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-    .upload-zone { border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; padding: 16px; text-align: center; cursor: pointer; transition: all 0.3s; background: rgba(255,255,255,0.05); }
-    .upload-zone:hover { border-color: #3b82f6; background: rgba(59,130,246,0.1); }
-    .upload-zone.dragover { border-color: #22c55e; }
-    .upload-zone input { display: none; }
-    #image-preview { width: 100%; max-height: 160px; object-fit: contain; border-radius: 8px; margin-top: 8px; display: none; }
-    .comp-card { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 12px; margin-bottom: 6px; border-left: 3px solid #3b82f6; }
-    .comp-card .name { font-weight: 600; font-size: 13px; }
-    .comp-card .type { font-size: 11px; color: #94a3b8; }
-    #history-list { display: flex; flex-direction: column; gap: 6px; }
-    .hist-item { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: background 0.2s; }
-    .hist-item:hover { background: rgba(255,255,255,0.1); }
-    .hist-item .symptom { font-size: 13px; font-weight: 500; }
-    .hist-item .date { font-size: 11px; color: #64748b; margin-top: 4px; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 270px;
+      background: #1e293b;
+      border-right: 1px solid #334155;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .sb-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid #334155;
+    }
+    .sb-section h3 {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #64748b;
+      margin-bottom: 10px;
+    }
+
+    /* Upload zone */
+    #uploadZone {
+      border: 2px dashed #334155;
+      border-radius: 10px;
+      padding: 18px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    #uploadZone:hover, #uploadZone.drag { border-color: #3b82f6; background: rgba(59,130,246,.08); }
+    #uploadZone input { display: none; }
+    .upload-icon { font-size: 28px; margin-bottom: 6px; }
+    .upload-hint { font-size: 11px; color: #64748b; }
+    #imgPreview {
+      width: 100%; max-height: 140px; object-fit: contain;
+      border-radius: 8px; margin-top: 10px; display: none;
+      border: 1px solid #334155;
+    }
+
+    /* Component cards */
+    #compList { display: flex; flex-direction: column; gap: 5px; max-height: 220px; overflow-y: auto; }
+    .comp-card {
+      background: #0f172a;
+      border-left: 3px solid #3b82f6;
+      border-radius: 6px;
+      padding: 7px 10px;
+    }
+    .comp-card .cn { font-size: 12px; font-weight: 600; color: #e2e8f0; }
+    .comp-card .ct { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+    /* History */
+    #histList { display: flex; flex-direction: column; gap: 5px; overflow-y: auto; }
+    .hist-item {
+      background: #0f172a; border-radius: 8px; padding: 8px 10px;
+      cursor: pointer; transition: background .15s;
+      border: 1px solid transparent;
+    }
+    .hist-item:hover { background: #1e3a5f; border-color: #3b82f6; }
+    .hist-item .hs { font-size: 12px; font-weight: 500; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hist-item .hd { font-size: 10px; color: #475569; margin-top: 3px; }
+    #histScroll { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 14px 16px; }
+    #histScroll h3 { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: 10px; flex-shrink: 0; }
+    #clearBtn {
+      margin-top: 8px; width: 100%; background: transparent;
+      border: 1px solid #334155; border-radius: 6px; padding: 6px;
+      color: #64748b; font-size: 11px; cursor: pointer; flex-shrink: 0;
+    }
+    #clearBtn:hover { background: #334155; color: #e2e8f0; }
+
+    /* ── Chat area ── */
     #content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
-    .msg { max-width: 85%; padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.6; animation: fadeIn 0.3s ease; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } }
-    .msg.ai { background: rgba(51,65,85,0.8); align-self: flex-start; border-bottom-left-radius: 4px; }
-    .msg.user { background: linear-gradient(135deg, #3b82f6, #2563eb); align-self: flex-end; color: white; border-bottom-right-radius: 4px; }
-    .msg.system { background: transparent; color: #64748b; font-size: 13px; text-align: center; align-self: center; }
-    .msg.error { background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); color: #f87171; }
-    .typing { display: flex; gap: 4px; padding: 8px; }
-    .typing span { width: 6px; height: 6px; background: #64748b; border-radius: 50%; animation: bounce 1.4s infinite; }
-    .typing span:nth-child(1){animation-delay:0s} .typing span:nth-child(2){animation-delay:0.2s} .typing span:nth-child(3){animation-delay:0.4s}
-    @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
-    .cause-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .cause-item:last-child { border-bottom: none; }
-    .prob-badge { background: #3b82f6; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; flex-shrink: 0; }
-    .report-box { background: rgba(15,23,42,0.9); border: 1px solid rgba(34,197,94,0.4); border-radius: 12px; padding: 16px; margin: 8px 0; }
-    .report-box h4 { color: #22c55e; margin-bottom: 12px; font-size: 14px; }
-    .report-box pre { white-space: pre-wrap; font-size: 13px; line-height: 1.8; }
-    #input-area { padding: 12px 16px; background: rgba(30,41,59,0.8); display: flex; gap: 8px; border-top: 1px solid rgba(255,255,255,0.1); }
-    #msgInput { flex: 1; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 12px 20px; color: white; font-size: 14px; outline: none; }
+
+    #messages {
+      flex: 1; overflow-y: auto; padding: 20px 24px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    #messages::-webkit-scrollbar { width: 6px; }
+    #messages::-webkit-scrollbar-track { background: transparent; }
+    #messages::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+    .msg { max-width: 82%; animation: fadeUp .25s ease; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } }
+
+    .bubble {
+      padding: 11px 15px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.65;
+      word-break: break-word;
+    }
+    .msg.ai { align-self: flex-start; }
+    .msg.ai .bubble { background: #1e293b; border-bottom-left-radius: 4px; color: #e2e8f0; }
+    .msg.user { align-self: flex-end; }
+    .msg.user .bubble { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-bottom-right-radius: 4px; }
+    .msg.system { align-self: center; }
+    .msg.system .bubble { background: transparent; color: #64748b; font-size: 12px; text-align: center; padding: 6px 12px; }
+    .msg.error .bubble { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4); color: #fca5a5; }
+
+    /* Markdown inside bubbles */
+    .bubble h1,.bubble h2,.bubble h3,.bubble h4 { margin: .8em 0 .4em; font-size: 1em; color: #93c5fd; }
+    .bubble p { margin: .4em 0; }
+    .bubble ul,.bubble ol { margin: .4em 0 .4em 1.2em; }
+    .bubble code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: .9em; }
+    .bubble pre { background: #0f172a; padding: 10px; border-radius: 8px; overflow-x: auto; margin: .6em 0; }
+    .bubble pre code { background: none; padding: 0; }
+    .bubble strong { color: #f8fafc; }
+
+    /* Cause cards */
+    .cause-list { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+    .cause-card {
+      background: rgba(255,255,255,.05);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .prob { background: #3b82f6; color: #fff; border-radius: 10px; padding: 2px 8px; font-size: 11px; font-weight: 600; flex-shrink: 0; white-space: nowrap; }
+    .cause-body .cause-text { font-size: 13px; }
+    .cause-body .cause-fix { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+
+    /* Report box */
+    .report-wrap { background: #0f172a; border: 1px solid #22c55e44; border-radius: 12px; padding: 16px; margin-top: 4px; }
+    .report-wrap .rtitle { color: #4ade80; font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+
+    /* Typing indicator */
+    .typing-bubble { background: #1e293b; border-radius: 16px; border-bottom-left-radius: 4px; padding: 12px 16px; display: flex; gap: 5px; align-items: center; }
+    .typing-bubble span { width: 6px; height: 6px; background: #475569; border-radius: 50%; animation: bounce 1.3s infinite; }
+    .typing-bubble span:nth-child(2){animation-delay:.2s}
+    .typing-bubble span:nth-child(3){animation-delay:.4s}
+    @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
+
+    /* ── Input area ── */
+    #inputArea {
+      padding: 12px 16px;
+      background: #1e293b;
+      border-top: 1px solid #334155;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    #msgInput {
+      flex: 1;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 24px;
+      padding: 10px 18px;
+      color: #e2e8f0;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s;
+    }
     #msgInput:focus { border-color: #3b82f6; }
-    #msgInput::placeholder { color: #64748b; }
-    #sendBtn { background: #3b82f6; border: none; border-radius: 24px; padding: 12px 20px; color: white; font-size: 14px; cursor: pointer; }
-    #sendBtn:hover { background: #2563eb; }
-    #reportBtn { background: #22c55e; border: none; border-radius: 24px; padding: 12px 16px; color: white; font-size: 14px; cursor: pointer; }
-    #reportBtn:hover { background: #16a34a; }
-    #clearBtn { background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 6px 12px; color: #94a3b8; font-size: 12px; cursor: pointer; margin-top: 8px; }
-    #clearBtn:hover { background: rgba(255,255,255,0.1); }
+    #msgInput::placeholder { color: #475569; }
+    .btn {
+      border: none; border-radius: 24px; padding: 10px 18px;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      transition: filter .2s;
+      white-space: nowrap;
+    }
+    .btn:hover { filter: brightness(1.1); }
+    #sendBtn { background: #3b82f6; color: #fff; }
+    #reportBtn { background: #16a34a; color: #fff; }
   </style>
 </head>
 <body>
-  <header>
-    <div class="status-dot" id="statusDot"></div>
-    <h1>🔋 电池维修 AI 助手</h1>
-    <span id="sessionId" style="margin-left:auto;font-size:12px;color:#64748b;"></span>
-  </header>
-  <div id="main">
-    <div id="sidebar">
-      <div class="sidebar-section">
-        <h3>📷 上传 PCB 照片</h3>
-        <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
-          <input type="file" id="fileInput" accept="image/*" onchange="handleFile(this.files[0])">
-          <div style="font-size:28px;">📁</div>
-          <p style="font-size:12px;">点击或拖拽上传</p>
-          <img id="image-preview" alt="预览">
-        </div>
-      </div>
-      <div class="sidebar-section">
-        <h3>🔧 已识别元件</h3>
-        <div id="components-list"><p style="font-size:12px;color:#64748b;">暂无</p></div>
-      </div>
-      <div class="sidebar-section" style="flex:1;overflow-y:auto;">
-        <h3>📋 历史记录</h3>
-        <div id="history-list"></div>
-        <button id="clearBtn" onclick="clearHistory()">清除历史</button>
+
+<header>
+  <span class="logo">🔋</span>
+  <h1>电池维修 AI 助手</h1>
+  <div class="conn-badge">
+    <div class="dot" id="dot"></div>
+    <span id="sessionLabel">未连接</span>
+  </div>
+</header>
+
+<div id="main">
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <!-- Upload -->
+    <div class="sb-section">
+      <h3>📷 上传 PCB 照片</h3>
+      <div id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept="image/*" onchange="handleFile(this.files[0])">
+        <div class="upload-icon">📁</div>
+        <div class="upload-hint">点击或拖拽照片到此处</div>
+        <img id="imgPreview" alt="预览">
       </div>
     </div>
-    <div id="content">
-      <div id="messages">
-        <div class="msg system">👋 欢迎使用电池维修 AI 助手！<br>1. 上传 PCB 照片<br>2. 描述故障现象<br>3. 获取维修建议</div>
-      </div>
-      <div id="input-area">
-        <input type="text" id="msgInput" placeholder="描述故障，例如：充电时发热严重" onkeypress="if(event.key==='Enter')sendText()">
-        <button id="sendBtn" onclick="sendText()">发送</button>
-        <button id="reportBtn" onclick="requestReport()">📋 报告</button>
-      </div>
+
+    <!-- Components -->
+    <div class="sb-section">
+      <h3>🔧 已识别元件</h3>
+      <div id="compList"><p style="font-size:12px;color:#475569;">暂无元件信息</p></div>
+    </div>
+
+    <!-- History -->
+    <div id="histScroll">
+      <h3>📋 历史记录</h3>
+      <div id="histList" style="flex:1;overflow-y:auto;"></div>
+      <button id="clearBtn" onclick="clearHistory()">清除历史记录</button>
     </div>
   </div>
+
+  <!-- Chat -->
+  <div id="content">
+    <div id="messages">
+      <div class="msg system">
+        <div class="bubble">👋 欢迎！请先上传 PCB 照片，然后描述故障现象，AI 将帮您分析维修方案。</div>
+      </div>
+    </div>
+    <div id="inputArea">
+      <input id="msgInput" type="text" placeholder="描述故障现象，如：充电时发热严重、无法开机…"
+             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendText();}">
+      <button class="btn" id="sendBtn" onclick="sendText()">发送</button>
+      <button class="btn" id="reportBtn" onclick="requestReport()">📋 生成报告</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// ── State ──────────────────────────────────────────────
 let ws = null;
 let currentSymptom = '';
-let history = [];
+let historyRecords = [];
 
+// ── WebSocket ──────────────────────────────────────────
 function connect() {
-  const sid = 'repair_' + Math.random().toString(36).substr(2, 8);
-  ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/ws/${sid}`);
-  ws.onopen = () => { document.getElementById('statusDot').classList.add('connected'); document.getElementById('sessionId').textContent = sid; loadHistory(); };
-  ws.onclose = () => { document.getElementById('statusDot').classList.remove('connected'); setTimeout(connect, 3000); };
-  ws.onmessage = e => { const d = JSON.parse(e.data); removeTyping(); handleMsg(d); };
-  ws.onerror = () => addMsg('ai', '连接错误', 'error');
+  const sid = 'r' + Math.random().toString(36).slice(2, 10);
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/${sid}`);
+
+  ws.onopen = () => {
+    document.getElementById('dot').classList.add('on');
+    loadHistory();
+  };
+
+  ws.onclose = () => {
+    document.getElementById('dot').classList.remove('on');
+    document.getElementById('sessionLabel').textContent = '重连中…';
+    setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => addMsg('error', '连接出错，请检查服务是否运行。');
+
+  ws.onmessage = e => {
+    removeTyping();
+    try { handleMsg(JSON.parse(e.data)); } catch (_) {}
+  };
 }
 
 function handleMsg(d) {
-  if (d.type === 'connected') { document.getElementById('sessionId').textContent = d.session_id; }
-  else if (d.type === 'status') addMsg('ai', d.message, 'system');
-  else if (d.type === 'error') addMsg('ai', d.message, 'error');
-  else if (d.type === 'analysis') { showComps(d.components); saveToHistory(); }
-  else if (d.type === 'reasoning') showReasoning(d.causes);
-  else if (d.type === 'report') showReport(d.content);
+  switch (d.type) {
+    case 'connected':
+      document.getElementById('sessionLabel').textContent = 'ID: ' + d.session_id;
+      break;
+    case 'status':
+      addMsg('system', d.message);
+      addTyping();
+      break;
+    case 'error':
+      addMsg('error', '⚠️ ' + d.message);
+      break;
+    case 'analysis':
+      renderComponents(d.components);
+      break;
+    case 'chat':
+      addMsg('ai', d.content);
+      break;
+    case 'reasoning':
+      renderCauses(d.causes);
+      if (currentSymptom) persistHistory(currentSymptom);
+      break;
+    case 'report':
+      renderReport(d.content);
+      if (currentSymptom) persistHistory(currentSymptom);
+      break;
+    case 'image_ack':
+      break;
+    case 'guidance':
+      addMsg('ai', `**步骤 ${d.step}**：${d.instruction}` +
+        (d.measurement_point ? `\n\n📍 测量点：${d.measurement_point}` : '') +
+        (d.expected_value ? `\n✅ 期望值：${d.expected_value}` : ''));
+      break;
+  }
 }
 
-function addMsg(role, content, extra='') {
-  const div = document.createElement('div');
-  div.className = 'msg ' + role + ' ' + extra;
-  div.innerHTML = content;
-  document.getElementById('messages').appendChild(div);
-  div.scrollIntoView({behavior:'smooth'});
+// ── Messaging helpers ──────────────────────────────────
+function addMsg(role, mdText, id) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + role;
+  if (id) wrap.id = id;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+
+  if (role === 'user' || role === 'system') {
+    bubble.textContent = mdText;
+  } else {
+    bubble.innerHTML = (typeof marked !== 'undefined') ? marked.parse(mdText) : mdText.replace(/\n/g, '<br>');
+  }
+
+  wrap.appendChild(bubble);
+  document.getElementById('messages').appendChild(wrap);
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return wrap;
 }
 
 function addTyping() {
-  const div = document.createElement('div');
-  div.id = 'typing';
-  div.className = 'msg ai typing';
-  div.innerHTML = '<span></span><span></span><span></span>';
-  document.getElementById('messages').appendChild(div);
+  if (document.getElementById('typing')) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ai'; wrap.id = 'typing';
+  wrap.innerHTML = '<div class="typing-bubble"><span></span><span></span><span></span></div>';
+  document.getElementById('messages').appendChild(wrap);
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-function removeTyping() { const t = document.getElementById('typing'); if (t) t.remove(); }
+function removeTyping() {
+  const t = document.getElementById('typing');
+  if (t) t.remove();
+}
 
+// ── Image upload ───────────────────────────────────────
 function handleFile(file) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    document.getElementById('image-preview').src = e.target.result;
-    document.getElementById('image-preview').style.display = 'block';
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({type:'image', image_id:'img_'+Date.now(), data:e.target.result.split(',')[1], filename:file.name}));
-      addTyping();
+    const dataUrl = e.target.result;
+    document.getElementById('imgPreview').src = dataUrl;
+    document.getElementById('imgPreview').style.display = 'block';
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      addMsg('error', '尚未连接到服务器，请稍后重试。');
+      return;
     }
+
+    const parts = dataUrl.split(',');
+    const mime = parts[0].replace('data:', '').replace(';base64', '');
+    const b64  = parts[1];
+
+    addMsg('system', `已选择图片：${file.name}，正在上传…`);
+    addTyping();
+    ws.send(JSON.stringify({
+      type: 'image',
+      image_id: 'img_' + Date.now(),
+      data: b64,
+      mime: mime,
+      filename: file.name
+    }));
   };
   reader.readAsDataURL(file);
 }
 
+// ── Text send ──────────────────────────────────────────
 function sendText() {
   const input = document.getElementById('msgInput');
   const text = input.value.trim();
   if (!text) return;
+  input.value = '';
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    addMsg('error', '尚未连接到服务器，请稍后重试。');
+    return;
+  }
+
   currentSymptom = text;
   addMsg('user', text);
-  input.value = '';
-  if (ws && ws.readyState === WebSocket.OPEN) { addTyping(); ws.send(JSON.stringify({type:'symptom', symptom:text})); }
+  addTyping();
+  ws.send(JSON.stringify({ type: 'symptom', symptom: text }));
 }
 
 function requestReport() {
-  if (!ws || ws.readyState !== WebSocket.OPEN) { addMsg('ai','请先连接服务器','error'); return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    addMsg('error', '尚未连接到服务器。');
+    return;
+  }
   addTyping();
-  ws.send(JSON.stringify({type:'text', content:'生成维修报告'}));
+  ws.send(JSON.stringify({ type: 'text', content: '生成维修报告' }));
 }
 
-function showComps(comps) {
-  const el = document.getElementById('components-list');
-  if (!comps || !comps.length) { el.innerHTML = '<p style="font-size:12px;color:#64748b;">未识别到元件</p>'; return; }
-  el.innerHTML = comps.map(c => `<div class="comp-card"><div class="name">${c.name||c.type||'未知'}</div><div class="type">${c.type||''} ${c.value?'· '+c.value:''}</div></div>`).join('');
+// ── Render helpers ─────────────────────────────────────
+function renderComponents(comps) {
+  const el = document.getElementById('compList');
+  if (!comps || !comps.length) {
+    el.innerHTML = '<p style="font-size:12px;color:#475569;">未能识别元件，请尝试更清晰的照片。</p>';
+    return;
+  }
+  el.innerHTML = comps.map(c => `
+    <div class="comp-card">
+      <div class="cn">${esc(c.name || c.type || '未知')}</div>
+      <div class="ct">${esc(c.type || '')}${c.value ? ' · ' + esc(c.value) : ''}</div>
+    </div>`).join('');
 }
 
-function showReasoning(causes) {
+function renderCauses(causes) {
   if (!causes || !causes.length) return;
-  const html = causes.map(c => `<div class="cause-item"><span class="prob-badge">${Math.round((c.probability||0.5)*100)}%</span><div><div>${c.cause||c.description||''}</div>${c.fix?'<div style="font-size:12px;color:#94a3b8;margin-top:4px;">修复：'+c.fix+'</div>':''}</div></div>`).join('');
-  addMsg('ai', '<h4 style="color:#3b82f6;margin-bottom:8px;">🔍 可能原因</h4>' + html);
-  saveToHistory();
+  const items = causes.map(c => `
+    <div class="cause-card">
+      <span class="prob">${Math.round((c.probability || .5) * 100)}%</span>
+      <div class="cause-body">
+        <div class="cause-text">${esc(c.cause || c.description || '')}</div>
+        ${c.fix ? `<div class="cause-fix">💡 ${esc(c.fix)}</div>` : ''}
+      </div>
+    </div>`).join('');
+
+  const wrap = addMsg('ai', '');
+  wrap.querySelector('.bubble').innerHTML =
+    `<strong>🔍 可能原因</strong><div class="cause-list">${items}</div>`;
 }
 
-function showReport(content) {
-  const html = '<div class="report-box"><h4>📋 维修报告</h4><pre>'+(typeof content==='string'?content:JSON.stringify(content,null,2))+'</pre></div>';
-  addMsg('ai', html);
-  saveToHistory();
+function renderReport(md) {
+  const wrap = addMsg('ai', '');
+  const bubble = wrap.querySelector('.bubble');
+  const html = (typeof marked !== 'undefined') ? marked.parse(md) : md.replace(/\n/g, '<br>');
+  bubble.innerHTML = `<div class="report-wrap"><div class="rtitle">📋 维修报告</div>${html}</div>`;
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── History ────────────────────────────────────────────
 async function loadHistory() {
   try {
     const r = await fetch('/api/history');
     const d = await r.json();
-    history = d.history || [];
+    historyRecords = d.history || [];
     renderHistory();
-  } catch(e) {}
+  } catch (_) {}
 }
 
-function saveToHistory() {
-  if (!currentSymptom) return;
-  const item = {symptom: currentSymptom, date: new Date().toLocaleString()};
-  history.unshift(item);
-  if (history.length > 50) history.pop();
+function persistHistory(symptom) {
+  const item = { symptom, date: new Date().toLocaleString('zh-CN') };
+  historyRecords.unshift(item);
+  if (historyRecords.length > 100) historyRecords.pop();
   renderHistory();
-  fetch('/api/history', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(item)}).catch(()=>{});
+  fetch('/api/history', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item)
+  }).catch(() => {});
 }
 
 function renderHistory() {
-  const el = document.getElementById('history-list');
-  if (!history.length) { el.innerHTML = '<p style="font-size:12px;color:#64748b;">暂无历史</p>'; return; }
-  el.innerHTML = history.map(h => `<div class="hist-item" onclick="loadFromHistory('${h.symptom.replace(/'/g,"\\'")}')"><div class="symptom">${h.symptom}</div><div class="date">${h.date}</div></div>`).join('');
+  const el = document.getElementById('histList');
+  if (!historyRecords.length) {
+    el.innerHTML = '<p style="font-size:12px;color:#475569;">暂无记录</p>';
+    return;
+  }
+  el.innerHTML = historyRecords.map((h, i) => `
+    <div class="hist-item" onclick="replayHistory(${i})">
+      <div class="hs">${esc(h.symptom)}</div>
+      <div class="hd">${esc(h.date || h.timestamp || '')}</div>
+    </div>`).join('');
 }
 
-function loadFromHistory(symptom) {
-  document.getElementById('msgInput').value = symptom;
-  sendText();
+function replayHistory(idx) {
+  const h = historyRecords[idx];
+  if (!h) return;
+  document.getElementById('msgInput').value = h.symptom;
+  document.getElementById('msgInput').focus();
 }
 
 function clearHistory() {
   if (!confirm('确定清除所有历史记录？')) return;
-  history = [];
+  historyRecords = [];
   renderHistory();
-  fetch('/api/history', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({clear:true})}).catch(()=>{});
+  fetch('/api/history', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clear: true })
+  }).catch(() => {});
 }
 
+// ── Drag & drop ────────────────────────────────────────
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) handleFile(f);
+});
+
+// ── Init ───────────────────────────────────────────────
 connect();
-const uz = document.getElementById('uploadZone');
-uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('dragover'); });
-uz.addEventListener('dragleave', e => { uz.classList.remove('dragover'); });
-uz.addEventListener('drop', e => { e.preventDefault(); uz.classList.remove('dragover'); const file = e.dataTransfer.files[0]; if (file) handleFile(file); });
 </script>
 </body>
 </html>
