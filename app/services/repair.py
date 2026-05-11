@@ -22,33 +22,20 @@ class RepairSession:
         client = get_client()
         prompt = (
             "你是专业的电池维修技师。请仔细识别这张 PCB/电路板照片中的所有电子元件。\n"
-            "特别注意识别以下类型：\n"
-            "1. 电阻器 (Resistor) - 标注阻值（如 10Ω, 1kΩ, 10kΩ）和功率\n"
-            "2. 电容器 (Capacitor) - 标注容值（如 10uF, 100nF）和耐压\n"
-            "3. 电感器 (Inductor)\n"
-            "4. IC 芯片 - 标注芯片型号/丝印（非常重要！）\n"
-            "5. MOSFET / 三极管 - 标注型号（非常重要！）\n"
-            "6. 二极管 / 稳压管\n"
-            "7. LED 指示灯\n"
-            "8. 连接器 / 接口（USB, JST, XT30/60 等）\n"
-            "9. 晶振 (Crystal)\n"
-            "10. 保险丝 / 自恢复保险 (Fuse / PTC)\n"
-            "\n请以 JSON 格式返回，components 包含识别到的所有元件（含推测型号），positions 描述各元件在板上的大致位置：\n"
-            '{"components": [{"name": "元件名称/型号", "type": "元件类型", "value": "参数值（尽量详细）", "notes": "备注或风险提示"}], '
-            '"positions": [{"name": "元件名称/型号", "location": "板面位置（如左上角、中央偏右）", "notes": "备注"}]}'
+            "特别注意识别：电阻器、电容器、IC芯片、MOSFET/三极管、二极管、LED指示灯、连接器/接口、晶振、保险丝等。\n"
+            "请以 JSON 格式返回：\n"
+            '{"components": [{"name": "元件名称/型号", "type": "元件类型", "value": "参数值", "notes": "备注"}], '
+            '"positions": [{"name": "元件名称", "location": "板面位置", "notes": "备注"}]}'
         )
         raw = await client.analyze_image(image_data, prompt)
         
-        # Try to extract JSON from response
         try:
-            # Try direct JSON parse first
             data = json.loads(raw)
         except json.JSONDecodeError:
-            # Try to find JSON in text (model may include thinking tags)
             try:
-                json_match = re.search(r'\{[\s\S]*\}', raw)
-                if json_match:
-                    data = json.loads(json_match.group())
+                match = re.search(r'\{[\s\S]*\}', raw)
+                if match:
+                    data = json.loads(match.group())
                 else:
                     data = {"components": [], "positions": []}
             except Exception:
@@ -71,24 +58,21 @@ class RepairSession:
             '"measurements": [{"point": "测量点", "expected": "正常值"}]}'
         )
         
-        messages = [{"role": "user", "content": prompt}]
+        raw = await client.chat([{"role": "user", "content": prompt}])
         
-        # Use GLM for cleaner JSON output
-        raw = await client.analyze_image("", f"推理故障原因：{symptom}")
-        
-        # Try to find JSON array in response
         causes = []
         try:
             data = json.loads(raw)
             causes = data.get("causes", [])
         except json.JSONDecodeError:
-            # Try extracting JSON from thinking text
             try:
-                match = re.search(r'\[.*\]', raw, re.DOTALL)
+                match = re.search(r'\{[\s\S]*\}', raw)
                 if match:
-                    causes = json.loads(match.group())
+                    causes = json.loads(match.group()).get("causes", [])
             except Exception:
-                causes = [{"cause": "请提供更多信息以便诊断", "probability": 0.5, "fix": "建议联系技术支持"}]
+                pass
+            if not causes:
+                causes = [{"cause": "需要进一步检测才能确定原因", "probability": 0.5, "fix": "建议联系技术支持"}]
         
         self.causes = causes
         return causes
@@ -98,17 +82,15 @@ class RepairSession:
         self.measurement_history.append({"step": step, "result": measurement_result})
         client = get_client()
         
-        context = f"症状：{self.symptom}\n已完成测量：{self.measurement_history}"
         prompt = (
-            f"基于以下信息，提供下一步测量指导：\n{context}\n"
-            f"用户刚完成测量：步骤{step}，结果：{measurement_result}\n"
-            "返回 JSON 格式：\n"
+            f"症状：{self.symptom}\n"
+            f"已完成测量：{json.dumps(self.measurement_history, ensure_ascii=False)}\n"
+            f"用户刚完成测量：步骤{step}，结果：{measurement_result}\n\n"
+            "请提供下一步测量指导，返回 JSON 格式：\n"
             '{"step": 3, "instruction": "下一步操作", "measurement_point": "测量点", "expected_value": "期望值"}'
         )
         
-        messages = [{"role": "user", "content": prompt}]
-        # For guidance, use text-only (no image)
-        raw = await client.chat(messages, model="MiniMax-M2.5")
+        raw = await client.chat([{"role": "user", "content": prompt}])
         
         try:
             data = json.loads(raw)
@@ -131,9 +113,9 @@ class RepairSession:
             f"已识别元件：{json.dumps(self.components, ensure_ascii=False)}\n"
             f"可能原因：{json.dumps(self.causes, ensure_ascii=False)}\n"
             f"测量历史：{json.dumps(self.measurement_history, ensure_ascii=False)}\n\n"
-            "请生成完整维修报告，包含：设备信息、诊断过程、维修结果、建议。"
+            "请生成完整维修报告，用 Markdown 格式，包含：\n"
+            "- 设备信息\n- 故障描述\n- 诊断过程\n- 可能原因\n- 维修建议\n- 预防措施"
         )
         
-        messages = [{"role": "user", "content": prompt}]
-        raw = await client.chat(messages, model="MiniMax-M2.5")
+        raw = await client.chat([{"role": "user", "content": prompt}])
         return raw

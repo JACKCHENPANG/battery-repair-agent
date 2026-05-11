@@ -1,3 +1,4 @@
+import uuid
 """WebSocket endpoint for real-time repair session."""
 import json
 import uuid
