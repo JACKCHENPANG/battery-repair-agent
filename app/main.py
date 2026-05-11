@@ -1,5 +1,6 @@
 """FastAPI entry point for Battery Repair AI."""
 import uuid
+from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, WebSocket, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse
@@ -16,6 +17,9 @@ static_dir = Path(__file__).parent / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+# History store
+_history = []
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
@@ -27,6 +31,20 @@ async def index():
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/history")
+async def get_history():
+    """Get repair session history."""
+    return {"history": list(reversed(_history[-50:]))}
+
+
+@app.post("/api/history")
+async def add_history(item: dict):
+    """Add a history record."""
+    item["timestamp"] = datetime.now().isoformat()
+    _history.append(item)
+    return {"ok": True}
 
 
 @app.post("/api/upload")
