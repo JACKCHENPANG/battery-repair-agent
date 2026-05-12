@@ -1,13 +1,14 @@
-import uuid
 """WebSocket endpoint for real-time repair session."""
 import json
-import uuid
 from fastapi import WebSocket
-from app.models.schemas import ImageAck, AnalysisResult, ReasoningResult, GuidanceResult, ErrorResult, StatusMessage
+from fastapi.websockets import WebSocketDisconnect
+from app.models.schemas import (
+    ImageAck, AnalysisResult, ReasoningResult,
+    GuidanceResult, ErrorResult, StatusMessage,
+)
 from app.services.repair import RepairSession
 
-# In-memory session store
-_sessions = {}
+_sessions: dict[str, RepairSession] = {}
 
 
 def get_session(session_id: str) -> RepairSession:
@@ -17,13 +18,16 @@ def get_session(session_id: str) -> RepairSession:
 
 
 def parse_client_message(raw_data: str) -> dict:
-    """Parse client message, handling union type parsing issues."""
     try:
         data = json.loads(raw_data)
         msg_type = data.get("type")
-        
         if msg_type == "image":
-            return {"parsed": True, "type": "image", "data": data.get("data", ""), "image_id": data.get("image_id", ""), "filename": data.get("filename", "")}
+            return {
+                "parsed": True, "type": "image",
+                "data": data.get("data", ""),
+                "image_id": data.get("image_id", ""),
+                "filename": data.get("filename", ""),
+            }
         elif msg_type == "symptom":
             return {"parsed": True, "type": "symptom", "symptom": data.get("symptom", "")}
         elif msg_type == "measure":
@@ -37,32 +41,30 @@ def parse_client_message(raw_data: str) -> dict:
 
 
 async def websocket_endpoint(websocket: WebSocket):
-    """Handle a WebSocket repair session."""
-    session_id = str(uuid.uuid4())[:8]
+    """Handle a WebSocket repair session. main.py has already accepted and sent 'connected'."""
+    session_id = getattr(websocket, "session_id", None) or "unknown"
     session = get_session(session_id)
-    
-    await websocket.send_json({"type": "connected", "session_id": session_id})
-    
+
     try:
         while True:
             raw = await websocket.receive_text()
             parsed = parse_client_message(raw)
-            
+
             if not parsed.get("parsed"):
-                await websocket.send_json(ErrorResult(message=parsed.get("error", "解析失败")).model_dump())
+                await websocket.send_json(ErrorResult(message=parsed.get("error", "消息解析失败")).model_dump())
                 continue
 
             msg_type = parsed["type"]
 
             if msg_type == "image":
-                await websocket.send_json(StatusMessage(message="正在分析图片...").model_dump())
+                await websocket.send_json(StatusMessage(message="正在识别元件，请稍候...").model_dump())
                 try:
                     result = await session.analyze_components(parsed["data"])
                     await websocket.send_json(
                         AnalysisResult(
                             components=result["components"],
                             positions=result["positions"],
-                            raw_text=result["raw_text"]
+                            raw_text=result["raw_text"],
                         ).model_dump()
                     )
                     await websocket.send_json(ImageAck(image_id=parsed["image_id"]).model_dump())
@@ -83,10 +85,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     guidance = await session.get_guidance(parsed["step"], parsed["result"])
                     await websocket.send_json(
                         GuidanceResult(
-                            step=guidance["step"],
-                            instruction=guidance["instruction"],
+                            step=guidance.get("step", parsed["step"] + 1),
+                            instruction=guidance.get("instruction", ""),
                             measurement_point=guidance.get("measurement_point", ""),
-                            expected_value=guidance.get("expected_value", "")
+                            expected_value=guidance.get("expected_value", ""),
                         ).model_dump()
                     )
                 except Exception as e:
@@ -102,7 +104,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     except Exception as e:
                         await websocket.send_json(ErrorResult(message=f"报告生成失败: {e}").model_dump())
                 else:
-                    await websocket.send_json(StatusMessage(message="请描述故障现象或输入'生成维修报告'").model_dump())
+                    await websocket.send_json(
+                        StatusMessage(message="请描述故障现象，或点击「📋 报告」生成维修报告").model_dump()
+                    )
 
+    except WebSocketDisconnect:
+        _sessions.pop(session_id, None)
     except Exception:
-        pass
+        _sessions.pop(session_id, None)

@@ -2,8 +2,8 @@
 import uuid
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI, WebSocket, UploadFile, File
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi import FastAPI, WebSocket, UploadFile, File, Request
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import aiofiles
 
@@ -12,18 +12,15 @@ from app.api.websocket import websocket_endpoint
 
 app = FastAPI(title="BatteryRepairAI", version="0.1.0")
 
-# Mount static files
 static_dir = Path(__file__).parent / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-# History store
-_history = []
+_history: list[dict] = []
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    """Serve the main HTML page."""
     html_path = Path(__file__).parent / "templates" / "index.html"
     return FileResponse(str(html_path))
 
@@ -35,21 +32,28 @@ async def health():
 
 @app.get("/api/history")
 async def get_history():
-    """Get repair session history."""
     return {"history": list(reversed(_history[-50:]))}
 
 
 @app.post("/api/history")
-async def add_history(item: dict):
-    """Add a history record."""
+async def add_history(request: Request):
+    item = await request.json()
+    if item.get("clear"):
+        _history.clear()
+        return {"ok": True, "cleared": True}
     item["timestamp"] = datetime.now().isoformat()
     _history.append(item)
     return {"ok": True}
 
 
+@app.delete("/api/history")
+async def clear_history():
+    _history.clear()
+    return {"ok": True}
+
+
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """Backup file upload endpoint."""
     upload_path = Path(UPLOAD_DIR) / file.filename
     async with aiofiles.open(upload_path, "wb") as f:
         content = await file.read()
@@ -59,11 +63,10 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.websocket("/ws/{session_id}")
 async def ws(websocket: WebSocket, session_id: str):
-    """WebSocket endpoint — delegates to websocket module."""
     await websocket.accept()
-    actual_id = session_id if session_id else str(uuid.uuid4())[:8]
-    await websocket.send_json({"type": "connected", "session_id": actual_id})
+    actual_id = session_id or str(uuid.uuid4())[:8]
     websocket.session_id = actual_id
+    await websocket.send_json({"type": "connected", "session_id": actual_id})
     await websocket_endpoint(websocket)
 
 

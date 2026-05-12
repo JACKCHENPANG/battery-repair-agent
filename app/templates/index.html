@@ -3,231 +3,769 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🔋 电池维修 AI 助手</title>
+  <title>电池维修 AI 助手</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; }
-    header { background: rgba(30,41,59,0.95); backdrop-filter: blur(10px); padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-    header h1 { font-size: 18px; font-weight: 600; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; flex-shrink: 0; }
-    .status-dot.connected { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-base:    #0d1117;
+      --bg-panel:   #161b22;
+      --bg-card:    #21262d;
+      --bg-input:   #1c2128;
+      --border:     rgba(255,255,255,0.08);
+      --accent:     #58a6ff;
+      --accent2:    #3fb950;
+      --warn:       #f85149;
+      --muted:      #8b949e;
+      --text:       #e6edf3;
+      --radius:     12px;
+      --shadow:     0 4px 24px rgba(0,0,0,0.4);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg-base);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .logo { font-size: 20px; }
+    header h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.02em; }
+    #statusText { font-size: 12px; color: var(--muted); margin-left: 4px; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #555; flex-shrink: 0; transition: background 0.4s;
+    }
+    .status-dot.connected { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+    #sessionId { margin-left: auto; font-size: 11px; color: var(--muted); font-family: monospace; }
+
+    /* ── Layout ── */
     #main { display: flex; flex: 1; overflow: hidden; }
-    #sidebar { width: 280px; background: rgba(30,41,59,0.5); border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; overflow-y: auto; }
-    .sidebar-section { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .sidebar-section h3 { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-    .upload-zone { border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; padding: 16px; text-align: center; cursor: pointer; transition: all 0.3s; background: rgba(255,255,255,0.05); }
-    .upload-zone:hover { border-color: #3b82f6; background: rgba(59,130,246,0.1); }
-    .upload-zone.dragover { border-color: #22c55e; }
-    .upload-zone input { display: none; }
-    #image-preview { width: 100%; max-height: 160px; object-fit: contain; border-radius: 8px; margin-top: 8px; display: none; }
-    .comp-card { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 12px; margin-bottom: 6px; border-left: 3px solid #3b82f6; }
-    .comp-card .name { font-weight: 600; font-size: 13px; }
-    .comp-card .type { font-size: 11px; color: #94a3b8; }
-    #history-list { display: flex; flex-direction: column; gap: 6px; }
-    .hist-item { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: background 0.2s; }
-    .hist-item:hover { background: rgba(255,255,255,0.1); }
-    .hist-item .symptom { font-size: 13px; font-weight: 500; }
-    .hist-item .date { font-size: 11px; color: #64748b; margin-top: 4px; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 270px;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .sidebar-inner { flex: 1; overflow-y: auto; padding-bottom: 8px; }
+    .sidebar-inner::-webkit-scrollbar { width: 4px; }
+    .sidebar-inner::-webkit-scrollbar-thumb { background: var(--bg-card); border-radius: 4px; }
+
+    .sb-section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .sb-label {
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed rgba(255,255,255,0.15);
+      border-radius: var(--radius);
+      padding: 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: rgba(255,255,255,0.02);
+      position: relative;
+    }
+    .upload-zone:hover { border-color: var(--accent); background: rgba(88,166,255,0.06); }
+    .upload-zone.dragover { border-color: var(--accent2); background: rgba(63,185,80,0.08); }
+    .upload-zone.uploading { border-color: var(--accent); opacity: 0.7; pointer-events: none; }
+    .upload-zone input[type=file] { display: none; }
+    .upload-icon { font-size: 26px; margin-bottom: 4px; }
+    .upload-hint { font-size: 11px; color: var(--muted); }
+    #image-preview {
+      width: 100%; max-height: 150px; object-fit: contain;
+      border-radius: 8px; margin-top: 10px; display: none;
+      border: 1px solid var(--border);
+    }
+    #upload-progress {
+      height: 3px; background: var(--bg-card); border-radius: 2px;
+      margin-top: 8px; overflow: hidden; display: none;
+    }
+    #upload-progress-bar {
+      height: 100%; background: var(--accent);
+      width: 0%; transition: width 0.3s; border-radius: 2px;
+    }
+
+    /* Component cards */
+    #components-list { display: flex; flex-direction: column; gap: 5px; }
+    .comp-card {
+      background: var(--bg-card);
+      border-radius: 8px; padding: 7px 10px;
+      border-left: 3px solid var(--accent);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .comp-icon { font-size: 14px; flex-shrink: 0; }
+    .comp-info { min-width: 0; }
+    .comp-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .comp-meta { font-size: 10px; color: var(--muted); }
+
+    /* History */
+    #history-list { display: flex; flex-direction: column; gap: 4px; }
+    .hist-item {
+      background: var(--bg-card); border-radius: 8px;
+      padding: 7px 10px; cursor: pointer; transition: background 0.15s;
+      border: 1px solid transparent;
+    }
+    .hist-item:hover { background: rgba(88,166,255,0.1); border-color: rgba(88,166,255,0.2); }
+    .hist-symptom { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hist-date { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    #clearBtn {
+      width: 100%; margin-top: 8px;
+      background: transparent; border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px; color: var(--muted);
+      font-size: 11px; cursor: pointer; transition: all 0.15s;
+    }
+    #clearBtn:hover { background: rgba(248,81,73,0.1); border-color: var(--warn); color: var(--warn); }
+
+    /* ── Main content ── */
     #content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
-    .msg { max-width: 85%; padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.6; animation: fadeIn 0.3s ease; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } }
-    .msg.ai { background: rgba(51,65,85,0.8); align-self: flex-start; border-bottom-left-radius: 4px; }
-    .msg.user { background: linear-gradient(135deg, #3b82f6, #2563eb); align-self: flex-end; color: white; border-bottom-right-radius: 4px; }
-    .msg.system { background: transparent; color: #64748b; font-size: 13px; text-align: center; align-self: center; }
-    .msg.error { background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); color: #f87171; }
-    .typing { display: flex; gap: 4px; padding: 8px; }
-    .typing span { width: 6px; height: 6px; background: #64748b; border-radius: 50%; animation: bounce 1.4s infinite; }
-    .typing span:nth-child(1){animation-delay:0s} .typing span:nth-child(2){animation-delay:0.2s} .typing span:nth-child(3){animation-delay:0.4s}
-    @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
-    .cause-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .cause-item:last-child { border-bottom: none; }
-    .prob-badge { background: #3b82f6; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; flex-shrink: 0; }
-    .report-box { background: rgba(15,23,42,0.9); border: 1px solid rgba(34,197,94,0.4); border-radius: 12px; padding: 16px; margin: 8px 0; }
-    .report-box h4 { color: #22c55e; margin-bottom: 12px; font-size: 14px; }
-    .report-box pre { white-space: pre-wrap; font-size: 13px; line-height: 1.8; }
-    #input-area { padding: 12px 16px; background: rgba(30,41,59,0.8); display: flex; gap: 8px; border-top: 1px solid rgba(255,255,255,0.1); }
-    #msgInput { flex: 1; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 12px 20px; color: white; font-size: 14px; outline: none; }
-    #msgInput:focus { border-color: #3b82f6; }
-    #msgInput::placeholder { color: #64748b; }
-    #sendBtn { background: #3b82f6; border: none; border-radius: 24px; padding: 12px 20px; color: white; font-size: 14px; cursor: pointer; }
-    #sendBtn:hover { background: #2563eb; }
-    #reportBtn { background: #22c55e; border: none; border-radius: 24px; padding: 12px 16px; color: white; font-size: 14px; cursor: pointer; }
-    #reportBtn:hover { background: #16a34a; }
-    #clearBtn { background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 6px 12px; color: #94a3b8; font-size: 12px; cursor: pointer; margin-top: 8px; }
-    #clearBtn:hover { background: rgba(255,255,255,0.1); }
+
+    #messages {
+      flex: 1; overflow-y: auto; padding: 20px 24px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    #messages::-webkit-scrollbar { width: 5px; }
+    #messages::-webkit-scrollbar-thumb { background: var(--bg-card); border-radius: 4px; }
+
+    .msg {
+      max-width: 82%; font-size: 14px; line-height: 1.65;
+      animation: fadeUp 0.25s ease; border-radius: 16px;
+      padding: 11px 15px; word-break: break-word;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .msg.ai {
+      background: var(--bg-card);
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .msg.user {
+      background: linear-gradient(135deg, #1f6feb, #388bfd);
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+      color: #fff;
+    }
+    .msg.system {
+      background: transparent; color: var(--muted);
+      font-size: 12px; text-align: center; align-self: center;
+      max-width: 100%; border: none; padding: 4px 0;
+    }
+    .msg.error {
+      background: rgba(248,81,73,0.1);
+      border: 1px solid rgba(248,81,73,0.3);
+      color: #ff7b7b; align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+
+    /* Typing indicator */
+    .typing-indicator {
+      display: flex; align-items: center; gap: 4px;
+      padding: 10px 14px; background: var(--bg-card);
+      border: 1px solid var(--border); border-radius: 16px;
+      border-bottom-left-radius: 4px; align-self: flex-start;
+      animation: fadeUp 0.25s ease;
+    }
+    .typing-indicator span {
+      width: 6px; height: 6px; background: var(--muted);
+      border-radius: 50%; animation: typeBounce 1.3s infinite;
+    }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.15s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.30s; }
+    @keyframes typeBounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30%           { transform: translateY(-5px); }
+    }
+
+    /* Cause items */
+    .causes-wrapper { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+    .cause-item {
+      background: rgba(255,255,255,0.04); border-radius: 8px;
+      padding: 8px 10px; display: flex; gap: 10px; align-items: flex-start;
+    }
+    .prob-col { display: flex; flex-direction: column; align-items: center; gap: 3px; flex-shrink: 0; width: 42px; }
+    .prob-badge {
+      background: var(--accent); color: #fff;
+      padding: 2px 6px; border-radius: 20px; font-size: 10px; font-weight: 600;
+      white-space: nowrap;
+    }
+    .prob-bar { width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+    .prob-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+    .cause-body { flex: 1; min-width: 0; }
+    .cause-text { font-size: 13px; font-weight: 500; }
+    .cause-fix { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+    /* Report box */
+    .report-box {
+      background: rgba(15,20,30,0.7);
+      border: 1px solid rgba(63,185,80,0.35);
+      border-radius: var(--radius); padding: 14px 16px;
+    }
+    .report-title {
+      color: var(--accent2); font-size: 13px; font-weight: 600;
+      margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+    }
+    .report-content { font-size: 13px; line-height: 1.8; }
+    .report-content h1 { font-size: 15px; color: var(--accent2); margin: 10px 0 4px; }
+    .report-content h2 { font-size: 14px; color: var(--accent); margin: 8px 0 4px; }
+    .report-content h3 { font-size: 13px; color: #c9d1d9; margin: 6px 0 3px; }
+    .report-content strong { color: #f0f6fc; }
+    .report-content ul, .report-content ol { padding-left: 18px; }
+    .report-content li { margin: 2px 0; }
+    .report-content p { margin: 4px 0; }
+    .report-content hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+
+    /* Analysis tag in chat */
+    .analysis-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(63,185,80,0.12); border: 1px solid rgba(63,185,80,0.3);
+      color: var(--accent2); border-radius: 20px; padding: 3px 10px;
+      font-size: 12px; font-weight: 600; margin-bottom: 6px;
+    }
+
+    /* ── Input area ── */
+    #input-area {
+      padding: 12px 20px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      display: flex; gap: 8px; align-items: center;
+    }
+    #msgInput {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 10px 18px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #msgInput:focus { border-color: var(--accent); }
+    #msgInput::placeholder { color: var(--muted); }
+
+    .btn {
+      border: none; border-radius: 24px; padding: 10px 18px;
+      font-size: 14px; cursor: pointer; font-weight: 500;
+      transition: all 0.15s; flex-shrink: 0;
+    }
+    #sendBtn { background: var(--accent); color: #fff; }
+    #sendBtn:hover { background: #79b8ff; }
+    #sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #reportBtn { background: var(--accent2); color: #fff; }
+    #reportBtn:hover { background: #56d364; }
+
+    /* Empty states */
+    .empty-state { font-size: 11px; color: var(--muted); text-align: center; padding: 8px 0; }
   </style>
 </head>
 <body>
   <header>
     <div class="status-dot" id="statusDot"></div>
-    <h1>🔋 电池维修 AI 助手</h1>
-    <span id="sessionId" style="margin-left:auto;font-size:12px;color:#64748b;"></span>
+    <span class="logo">🔋</span>
+    <h1>电池维修 AI 助手</h1>
+    <span id="statusText">未连接</span>
+    <span id="sessionId"></span>
   </header>
+
   <div id="main">
+    <!-- Sidebar -->
     <div id="sidebar">
-      <div class="sidebar-section">
-        <h3>📷 上传 PCB 照片</h3>
-        <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
-          <input type="file" id="fileInput" accept="image/*" onchange="handleFile(this.files[0])">
-          <div style="font-size:28px;">📁</div>
-          <p style="font-size:12px;">点击或拖拽上传</p>
-          <img id="image-preview" alt="预览">
+      <div class="sidebar-inner">
+        <!-- Upload -->
+        <div class="sb-section">
+          <div class="sb-label">📷 上传 PCB 照片</div>
+          <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+            <input type="file" id="fileInput" accept="image/*">
+            <div class="upload-icon">📁</div>
+            <p class="upload-hint">点击或拖拽图片至此</p>
+            <img id="image-preview" alt="预览">
+          </div>
+          <div id="upload-progress"><div id="upload-progress-bar"></div></div>
+        </div>
+
+        <!-- Components -->
+        <div class="sb-section">
+          <div class="sb-label">🔧 已识别元件</div>
+          <div id="components-list">
+            <p class="empty-state">上传图片后自动识别</p>
+          </div>
+        </div>
+
+        <!-- History -->
+        <div class="sb-section" style="flex:1;">
+          <div class="sb-label">📋 历史记录</div>
+          <div id="history-list">
+            <p class="empty-state" id="histEmpty">暂无历史</p>
+          </div>
+          <button id="clearBtn" onclick="clearHistory()">清除历史记录</button>
         </div>
       </div>
-      <div class="sidebar-section">
-        <h3>🔧 已识别元件</h3>
-        <div id="components-list"><p style="font-size:12px;color:#64748b;">暂无</p></div>
-      </div>
-      <div class="sidebar-section" style="flex:1;overflow-y:auto;">
-        <h3>📋 历史记录</h3>
-        <div id="history-list"></div>
-        <button id="clearBtn" onclick="clearHistory()">清除历史</button>
-      </div>
     </div>
+
+    <!-- Main chat -->
     <div id="content">
       <div id="messages">
-        <div class="msg system">👋 欢迎使用电池维修 AI 助手！<br>1. 上传 PCB 照片<br>2. 描述故障现象<br>3. 获取维修建议</div>
+        <div class="msg system">
+          👋 欢迎使用电池维修 AI 助手<br>
+          第一步：上传 PCB 照片 → 第二步：描述故障现象 → 第三步：获取维修建议
+        </div>
       </div>
       <div id="input-area">
-        <input type="text" id="msgInput" placeholder="描述故障，例如：充电时发热严重" onkeypress="if(event.key==='Enter')sendText()">
-        <button id="sendBtn" onclick="sendText()">发送</button>
-        <button id="reportBtn" onclick="requestReport()">📋 报告</button>
+        <input type="text" id="msgInput" placeholder="描述故障，例如：充电时发热严重、不开机…" autocomplete="off">
+        <button class="btn" id="sendBtn" onclick="sendText()">发送</button>
+        <button class="btn" id="reportBtn" onclick="requestReport()">📋 报告</button>
       </div>
     </div>
   </div>
+
 <script>
+'use strict';
+
 let ws = null;
 let currentSymptom = '';
-let history = [];
+let localHistory = [];
+let reconnectTimer = null;
+let reconnectDelay = 2000;
+let waitingForResult = false;
 
+// ── WebSocket ──────────────────────────────────────────────
 function connect() {
-  const sid = 'repair_' + Math.random().toString(36).substr(2, 8);
-  ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/ws/${sid}`);
-  ws.onopen = () => { document.getElementById('statusDot').classList.add('connected'); document.getElementById('sessionId').textContent = sid; loadHistory(); };
-  ws.onclose = () => { document.getElementById('statusDot').classList.remove('connected'); setTimeout(connect, 3000); };
-  ws.onmessage = e => { const d = JSON.parse(e.data); removeTyping(); handleMsg(d); };
-  ws.onerror = () => addMsg('ai', '连接错误', 'error');
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  const sid = 'r' + Math.random().toString(36).slice(2, 10);
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/${sid}`);
+
+  ws.onopen = () => {
+    reconnectDelay = 2000;
+    loadHistory();
+  };
+
+  ws.onclose = () => {
+    setStatus(false);
+    removeTyping();
+    waitingForResult = false;
+    setSendEnabled(true);
+    reconnectTimer = setTimeout(connect, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
+  };
+
+  ws.onerror = () => {
+    // onclose will handle reconnect
+  };
+
+  ws.onmessage = e => {
+    try {
+      const d = JSON.parse(e.data);
+      handleMsg(d);
+    } catch (err) {
+      console.error('WS parse error', err);
+    }
+  };
 }
 
+function setStatus(connected) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  if (connected) {
+    dot.classList.add('connected');
+    txt.textContent = '已连接';
+  } else {
+    dot.classList.remove('connected');
+    txt.textContent = '重连中…';
+  }
+}
+
+function sendWS(obj) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    addMsg('error', '⚠ 连接未就绪，请稍候重试');
+    return false;
+  }
+  ws.send(JSON.stringify(obj));
+  return true;
+}
+
+// ── Message handling ───────────────────────────────────────
 function handleMsg(d) {
-  if (d.type === 'connected') { document.getElementById('sessionId').textContent = d.session_id; }
-  else if (d.type === 'status') addMsg('ai', d.message, 'system');
-  else if (d.type === 'error') addMsg('ai', d.message, 'error');
-  else if (d.type === 'analysis') { showComps(d.components); saveToHistory(); }
-  else if (d.type === 'reasoning') showReasoning(d.causes);
-  else if (d.type === 'report') showReport(d.content);
+  switch (d.type) {
+    case 'connected':
+      setStatus(true);
+      document.getElementById('sessionId').textContent = 'ID: ' + d.session_id;
+      break;
+
+    case 'status':
+      // Keep typing indicator, just update message briefly
+      showStatusInTyping(d.message);
+      break;
+
+    case 'error':
+      removeTyping();
+      waitingForResult = false;
+      setSendEnabled(true);
+      addMsg('error', '❌ ' + esc(d.message));
+      break;
+
+    case 'image_ack':
+      // Image upload confirmed, typing already removed by analysis result
+      break;
+
+    case 'analysis':
+      removeTyping();
+      waitingForResult = false;
+      setSendEnabled(true);
+      showAnalysis(d.components, d.positions);
+      break;
+
+    case 'reasoning':
+      removeTyping();
+      waitingForResult = false;
+      setSendEnabled(true);
+      showReasoning(d.causes);
+      saveToHistory();
+      break;
+
+    case 'report':
+      removeTyping();
+      waitingForResult = false;
+      setSendEnabled(true);
+      showReport(d.content);
+      saveToHistory();
+      break;
+
+    default:
+      console.log('Unknown message type:', d.type);
+  }
 }
 
-function addMsg(role, content, extra='') {
+// ── UI helpers ─────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function addMsg(type, html, scrollIntoView = true) {
+  const box = document.getElementById('messages');
   const div = document.createElement('div');
-  div.className = 'msg ' + role + ' ' + extra;
-  div.innerHTML = content;
-  document.getElementById('messages').appendChild(div);
-  div.scrollIntoView({behavior:'smooth'});
+  div.className = 'msg ' + type;
+  div.innerHTML = html;
+  box.appendChild(div);
+  if (scrollIntoView) div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return div;
 }
 
 function addTyping() {
+  removeTyping();
+  const box = document.getElementById('messages');
   const div = document.createElement('div');
   div.id = 'typing';
-  div.className = 'msg ai typing';
+  div.className = 'typing-indicator';
   div.innerHTML = '<span></span><span></span><span></span>';
-  document.getElementById('messages').appendChild(div);
+  box.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-function removeTyping() { const t = document.getElementById('typing'); if (t) t.remove(); }
+function removeTyping() {
+  const t = document.getElementById('typing');
+  if (t) t.remove();
+}
 
+function showStatusInTyping(msg) {
+  // Show status text next to typing dots
+  const t = document.getElementById('typing');
+  if (t) {
+    let label = t.querySelector('.typing-label');
+    if (!label) {
+      label = document.createElement('span');
+      label.className = 'typing-label';
+      label.style.cssText = 'font-size:12px;color:#8b949e;margin-left:6px;';
+      t.appendChild(label);
+    }
+    label.textContent = msg;
+  }
+}
+
+function setSendEnabled(enabled) {
+  document.getElementById('sendBtn').disabled = !enabled;
+  document.getElementById('msgInput').disabled = !enabled;
+}
+
+// ── File upload ────────────────────────────────────────────
 function handleFile(file) {
-  if (!file) return;
+  if (!file || !file.type.startsWith('image/')) return;
+
+  const preview = document.getElementById('image-preview');
+  const zone = document.getElementById('uploadZone');
+  const progress = document.getElementById('upload-progress');
+  const bar = document.getElementById('upload-progress-bar');
+
   const reader = new FileReader();
   reader.onload = e => {
-    document.getElementById('image-preview').src = e.target.result;
-    document.getElementById('image-preview').style.display = 'block';
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({type:'image', image_id:'img_'+Date.now(), data:e.target.result.split(',')[1], filename:file.name}));
-      addTyping();
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      addMsg('error', '⚠ 请等待连接成功后再上传图片');
+      return;
     }
+
+    // Show progress animation
+    progress.style.display = 'block';
+    bar.style.width = '30%';
+    zone.classList.add('uploading');
+
+    const base64 = e.target.result.split(',')[1];
+    bar.style.width = '70%';
+
+    addTyping();
+    waitingForResult = true;
+    setSendEnabled(false);
+
+    const ok = sendWS({ type: 'image', image_id: 'img_' + Date.now(), data: base64, filename: file.name });
+    if (!ok) {
+      removeTyping();
+      waitingForResult = false;
+      setSendEnabled(true);
+    }
+
+    setTimeout(() => {
+      bar.style.width = '100%';
+      setTimeout(() => { progress.style.display = 'none'; bar.style.width = '0%'; zone.classList.remove('uploading'); }, 400);
+    }, 300);
   };
   reader.readAsDataURL(file);
 }
 
+// ── Send symptom ───────────────────────────────────────────
 function sendText() {
   const input = document.getElementById('msgInput');
   const text = input.value.trim();
   if (!text) return;
+
   currentSymptom = text;
-  addMsg('user', text);
+  addMsg('user', esc(text));
   input.value = '';
-  if (ws && ws.readyState === WebSocket.OPEN) { addTyping(); ws.send(JSON.stringify({type:'symptom', symptom:text})); }
+
+  addTyping();
+  waitingForResult = true;
+  setSendEnabled(false);
+
+  const ok = sendWS({ type: 'symptom', symptom: text });
+  if (!ok) {
+    removeTyping();
+    waitingForResult = false;
+    setSendEnabled(true);
+  }
 }
 
 function requestReport() {
-  if (!ws || ws.readyState !== WebSocket.OPEN) { addMsg('ai','请先连接服务器','error'); return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) { addMsg('error', '⚠ 连接未就绪'); return; }
   addTyping();
-  ws.send(JSON.stringify({type:'text', content:'生成维修报告'}));
+  waitingForResult = true;
+  setSendEnabled(false);
+  const ok = sendWS({ type: 'text', content: '生成维修报告' });
+  if (!ok) { removeTyping(); waitingForResult = false; setSendEnabled(true); }
 }
 
-function showComps(comps) {
+// ── Display functions ──────────────────────────────────────
+function compIcon(type) {
+  const t = (type || '').toLowerCase();
+  if (t.includes('电阻') || t.includes('resistor')) return '⚡';
+  if (t.includes('电容') || t.includes('capacitor')) return '🔋';
+  if (t.includes('ic') || t.includes('芯片') || t.includes('chip')) return '💾';
+  if (t.includes('mos') || t.includes('三极管') || t.includes('transistor')) return '🔌';
+  if (t.includes('二极管') || t.includes('diode')) return '➡';
+  if (t.includes('led')) return '💡';
+  if (t.includes('保险') || t.includes('fuse')) return '🛡';
+  if (t.includes('连接') || t.includes('connector')) return '🔗';
+  if (t.includes('晶振') || t.includes('crystal')) return '⏱';
+  return '🔩';
+}
+
+function showAnalysis(comps, positions) {
+  const n = comps ? comps.length : 0;
+  addMsg('ai', `<span class="analysis-tag">✅ 图片识别完成</span><br>已识别 <strong>${n}</strong> 个元件，请在左侧查看列表。<br>现在请<strong>描述故障现象</strong>，AI 将推理可能原因。`);
+
   const el = document.getElementById('components-list');
-  if (!comps || !comps.length) { el.innerHTML = '<p style="font-size:12px;color:#64748b;">未识别到元件</p>'; return; }
-  el.innerHTML = comps.map(c => `<div class="comp-card"><div class="name">${c.name||c.type||'未知'}</div><div class="type">${c.type||''} ${c.value?'· '+c.value:''}</div></div>`).join('');
+  if (!n) {
+    el.innerHTML = '<p class="empty-state">未能识别到元件，请尝试更清晰的照片</p>';
+    return;
+  }
+  el.innerHTML = comps.map(c => {
+    const name = esc(c.name || c.type || '未知元件');
+    const meta = [c.type, c.value].filter(Boolean).map(esc).join(' · ');
+    return `<div class="comp-card">
+      <div class="comp-icon">${compIcon(c.type)}</div>
+      <div class="comp-info">
+        <div class="comp-name" title="${name}">${name}</div>
+        ${meta ? `<div class="comp-meta">${meta}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function showReasoning(causes) {
-  if (!causes || !causes.length) return;
-  const html = causes.map(c => `<div class="cause-item"><span class="prob-badge">${Math.round((c.probability||0.5)*100)}%</span><div><div>${c.cause||c.description||''}</div>${c.fix?'<div style="font-size:12px;color:#94a3b8;margin-top:4px;">修复：'+c.fix+'</div>':''}</div></div>`).join('');
-  addMsg('ai', '<h4 style="color:#3b82f6;margin-bottom:8px;">🔍 可能原因</h4>' + html);
-  saveToHistory();
+  if (!causes || !causes.length) {
+    addMsg('ai', '未能推理出明确原因，请提供更多故障描述。');
+    return;
+  }
+  const items = causes.map(c => {
+    const pct = Math.round((c.probability || 0.5) * 100);
+    return `<div class="cause-item">
+      <div class="prob-col">
+        <span class="prob-badge">${pct}%</span>
+        <div class="prob-bar"><div class="prob-bar-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div class="cause-body">
+        <div class="cause-text">${esc(c.cause || c.description || '')}</div>
+        ${c.fix ? `<div class="cause-fix">💡 ${esc(c.fix)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  addMsg('ai', `<strong style="color:var(--accent)">🔍 可能故障原因</strong><div class="causes-wrapper">${items}</div>`);
+}
+
+function renderMarkdown(text) {
+  if (typeof text !== 'string') return esc(String(text));
+  // Escape HTML first, then apply markdown rules
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+    .replace(/^---+$/gm, '<hr>')
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  // Wrap loose li groups
+  html = html.replace(/(<li>.*?<\/li>)+/gs, m => '<ul>' + m + '</ul>');
+  return '<p>' + html + '</p>';
 }
 
 function showReport(content) {
-  const html = '<div class="report-box"><h4>📋 维修报告</h4><pre>'+(typeof content==='string'?content:JSON.stringify(content,null,2))+'</pre></div>';
+  const html = `<div class="report-box">
+    <div class="report-title">📋 维修诊断报告</div>
+    <div class="report-content">${renderMarkdown(content)}</div>
+  </div>`;
   addMsg('ai', html);
-  saveToHistory();
 }
 
+// ── History ────────────────────────────────────────────────
 async function loadHistory() {
   try {
     const r = await fetch('/api/history');
     const d = await r.json();
-    history = d.history || [];
+    localHistory = d.history || [];
     renderHistory();
-  } catch(e) {}
+  } catch (e) { /* server might not be ready yet */ }
 }
 
 function saveToHistory() {
   if (!currentSymptom) return;
-  const item = {symptom: currentSymptom, date: new Date().toLocaleString()};
-  history.unshift(item);
-  if (history.length > 50) history.pop();
+  const item = { symptom: currentSymptom, date: new Date().toLocaleString('zh-CN') };
+  localHistory.unshift(item);
+  if (localHistory.length > 50) localHistory.pop();
   renderHistory();
-  fetch('/api/history', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(item)}).catch(()=>{});
+  fetch('/api/history', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item),
+  }).catch(() => {});
 }
 
 function renderHistory() {
   const el = document.getElementById('history-list');
-  if (!history.length) { el.innerHTML = '<p style="font-size:12px;color:#64748b;">暂无历史</p>'; return; }
-  el.innerHTML = history.map(h => `<div class="hist-item" onclick="loadFromHistory('${h.symptom.replace(/'/g,"\\'")}')"><div class="symptom">${h.symptom}</div><div class="date">${h.date}</div></div>`).join('');
+  const empty = document.getElementById('histEmpty');
+  if (!localHistory.length) {
+    if (empty) empty.style.display = '';
+    el.querySelectorAll('.hist-item').forEach(n => n.remove());
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  // Re-render all items safely (no inline event handlers)
+  el.querySelectorAll('.hist-item').forEach(n => n.remove());
+  localHistory.forEach((h, i) => {
+    const div = document.createElement('div');
+    div.className = 'hist-item';
+    div.innerHTML = `<div class="hist-symptom">${esc(h.symptom)}</div><div class="hist-date">${esc(h.date || '')}</div>`;
+    div.addEventListener('click', () => loadFromHistory(h.symptom));
+    el.appendChild(div);
+  });
 }
 
 function loadFromHistory(symptom) {
-  document.getElementById('msgInput').value = symptom;
-  sendText();
+  const input = document.getElementById('msgInput');
+  input.value = symptom;
+  input.focus();
 }
 
-function clearHistory() {
+async function clearHistory() {
   if (!confirm('确定清除所有历史记录？')) return;
-  history = [];
+  localHistory = [];
   renderHistory();
-  fetch('/api/history', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({clear:true})}).catch(()=>{});
+  try {
+    await fetch('/api/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clear: true }),
+    });
+  } catch (e) {}
 }
 
+// ── Drag and drop ──────────────────────────────────────────
+const uploadZone = document.getElementById('uploadZone');
+const fileInput  = document.getElementById('fileInput');
+
+fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+
+uploadZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  uploadZone.classList.add('dragover');
+});
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+// Enter key to send
+document.getElementById('msgInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
+});
+
+// ── Boot ───────────────────────────────────────────────────
 connect();
-const uz = document.getElementById('uploadZone');
-uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('dragover'); });
-uz.addEventListener('dragleave', e => { uz.classList.remove('dragover'); });
-uz.addEventListener('drop', e => { e.preventDefault(); uz.classList.remove('dragover'); const file = e.dataTransfer.files[0]; if (file) handleFile(file); });
 </script>
 </body>
 </html>
